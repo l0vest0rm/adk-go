@@ -204,6 +204,7 @@ type chatCompletionsRequest struct {
 	Messages []map[string]interface{} `json:"messages"`
 	Tools    []map[string]interface{} `json:"tools,omitempty"`
 	Stream   bool                     `json:"stream,omitempty"`
+	Thinking map[string]interface{}   `json:"thinking,omitempty"`
 }
 
 type chatCompletionsResponse struct {
@@ -223,9 +224,10 @@ type choice struct {
 }
 
 type responseMessage struct {
-	Role      string     `json:"role,omitempty"`
-	Content   string     `json:"content"`
-	ToolCalls []toolCall `json:"tool_calls,omitempty"`
+	Role             string     `json:"role,omitempty"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []toolCall `json:"tool_calls,omitempty"`
 }
 
 type toolCall struct {
@@ -472,8 +474,9 @@ func (m *openAIModel) convertResponse(resp *chatCompletionsResponse) (*model.LLM
 	}
 
 	llmResp := &model.LLMResponse{
-		Content:      m.convertResponseMessage(choice.Message),
-		FinishReason: genai.FinishReason(choice.FinishReason),
+		Content:         m.convertResponseMessage(choice.Message),
+		ThinkingContent: choice.Message.ReasoningContent,
+		FinishReason:    genai.FinishReason(choice.FinishReason),
 	}
 
 	if resp.Usage != nil {
@@ -534,6 +537,40 @@ func (m *openAIModel) parseArgs(arguments string) map[string]any {
 	return args
 }
 
+func (m *openAIModel) convertStreamChoice(c *choice, usage *usage) *model.LLMResponse {
+	hasContent := c.Delta != nil && c.Delta.Content != ""
+	hasReasoning := c.Delta != nil && c.Delta.ReasoningContent != ""
+	isFinal := c.FinishReason != "" && c.FinishReason != "null"
+
+	llmResp := &model.LLMResponse{
+		Partial:         (hasContent || hasReasoning) && !isFinal,
+		TurnComplete:    isFinal,
+		FinishReason:    genai.FinishReason(c.FinishReason),
+		ThinkingContent: getReasoningContent(c.Delta),
+	}
+
+	if c.Delta != nil && hasContent {
+		llmResp.Content = m.convertResponseMessage(c.Delta)
+	}
+
+	if usage != nil {
+		llmResp.UsageMetadata = &genai.GenerateContentResponseUsageMetadata{
+			PromptTokenCount:     int32(usage.PromptTokens),
+			CandidatesTokenCount: int32(usage.CompletionTokens),
+			TotalTokenCount:      int32(usage.TotalTokens),
+		}
+	}
+
+	return llmResp
+}
+
+func getReasoningContent(delta *responseMessage) string {
+	if delta == nil {
+		return ""
+	}
+	return delta.ReasoningContent
+}
+
 func (m *openAIModel) parseStream(body io.Reader, yield func(*model.LLMResponse, error) bool) bool {
 	reader := io.Reader(body)
 	buf := make([]byte, 0, 4096)
@@ -568,23 +605,7 @@ func (m *openAIModel) parseStream(body io.Reader, yield func(*model.LLMResponse,
 				}
 
 				for _, c := range chunk.Choices {
-					llmResp := &model.LLMResponse{
-						Partial:      c.Delta != nil && c.Delta.Content != "",
-						TurnComplete: c.FinishReason != "" && c.FinishReason != "null",
-						FinishReason: genai.FinishReason(c.FinishReason),
-					}
-
-					if c.Delta != nil {
-						llmResp.Content = m.convertResponseMessage(c.Delta)
-					}
-
-					if chunk.Usage != nil {
-						llmResp.UsageMetadata = &genai.GenerateContentResponseUsageMetadata{
-							PromptTokenCount:     int32(chunk.Usage.PromptTokens),
-							CandidatesTokenCount: int32(chunk.Usage.CompletionTokens),
-							TotalTokenCount:      int32(chunk.Usage.TotalTokens),
-						}
-					}
+					llmResp := m.convertStreamChoice(&c, chunk.Usage)
 
 					if !yield(llmResp, nil) {
 						return false
@@ -607,13 +628,7 @@ func (m *openAIModel) parseStream(body io.Reader, yield func(*model.LLMResponse,
 						return false
 					}
 					for _, c := range chunk.Choices {
-						llmResp := &model.LLMResponse{
-							TurnComplete: c.FinishReason != "" && c.FinishReason != "null",
-							FinishReason: genai.FinishReason(c.FinishReason),
-						}
-						if c.Delta != nil {
-							llmResp.Content = m.convertResponseMessage(c.Delta)
-						}
+						llmResp := m.convertStreamChoice(&c, chunk.Usage)
 						if !yield(llmResp, nil) {
 							return false
 						}

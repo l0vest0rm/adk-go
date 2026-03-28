@@ -41,6 +41,7 @@ type LLMRequest struct {
 // It provides the first candidate response from the model if available.
 type LLMResponse struct {
 	Content           *genai.Content
+	ThinkingContent   string
 	CitationMetadata  *genai.CitationMetadata
 	GroundingMetadata *genai.GroundingMetadata
 	UsageMetadata     *genai.GenerateContentResponseUsageMetadata
