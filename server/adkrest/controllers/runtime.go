@@ -95,10 +95,7 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 	// set custom deadlines for this request - it overrides server-wide timeouts
 	rc := http.NewResponseController(rw)
 	deadline := time.Now().Add(c.sseTimeout)
-	err := rc.SetWriteDeadline(deadline)
-	if err != nil {
-		return newStatusError(fmt.Errorf("failed to set write deadline: %w", err), http.StatusInternalServerError)
-	}
+	_ = rc.SetWriteDeadline(deadline) // Ignore deadline error, continue anyway
 
 	runAgentRequest, err := decodeRequestBody(req)
 	if err != nil {
@@ -134,7 +131,7 @@ func (c *RuntimeAPIController) RunSSEHandler(rw http.ResponseWriter, req *http.R
 
 			continue
 		}
-		err := flashEvent(rc, rw, *event)
+		err = flashEvent(rc, rw, *event)
 		if err != nil {
 			return err
 		}

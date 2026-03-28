@@ -268,6 +268,26 @@ func (m *openAIModel) convertRequest(req *model.LLMRequest, stream bool) (*chatC
 		openAIReq.Tools = tools
 	}
 
+	// Handle thinking config for models like Doubao that support it
+	// Doubao/Volcengine models require thinking parameter to return reasoning_content
+	includeThinking := false
+	if req.Config != nil && req.Config.ThinkingConfig != nil && req.Config.ThinkingConfig.IncludeThoughts {
+		includeThinking = true
+	}
+	// Also enable for doubao models by default if not explicitly disabled
+	if m.name == "doubao-seed-1-8-251228" || m.name == "MiniMax-Text-01" {
+		includeThinking = true
+	}
+	if includeThinking {
+		openAIReq.Thinking = map[string]interface{}{
+			"type":          "enabled",
+			"budget_tokens": 10000,
+		}
+		if req.Config != nil && req.Config.ThinkingConfig != nil && req.Config.ThinkingConfig.ThinkingBudget != nil {
+			openAIReq.Thinking["budget_tokens"] = *req.Config.ThinkingConfig.ThinkingBudget
+		}
+	}
+
 	return openAIReq, nil
 }
 

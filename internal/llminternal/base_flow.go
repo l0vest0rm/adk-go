@@ -162,10 +162,12 @@ func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event,
 				yield(nil, err)
 				return
 			}
-			// Skip the model response event if there is no content and no error code.
+			// Skip the model response event if there is no content, no thinking content, and no error code.
 			// This is needed for the code executor to trigger another loop according to
 			// adk-python src/google/adk/flows/llm_flows/base_llm_flow.py BaseLlmFlow._postprocess_async.
-			if resp.Content == nil && resp.ErrorCode == "" && !resp.Interrupted {
+			// Also check ThinkingContent to allow streaming reasoning content events to pass through.
+			hasThinking := resp.LLMResponse != nil && resp.LLMResponse.ThinkingContent != ""
+			if resp.Content == nil && resp.ErrorCode == "" && !resp.Interrupted && !hasThinking {
 				continue
 			}
 

@@ -43,7 +43,10 @@ func (r *RuntimeAPIRouter) Routes() Routes {
 			Name:        "RunAgentSse",
 			Methods:     []string{http.MethodPost, http.MethodOptions},
 			Pattern:     "/run_sse",
-			HandlerFunc: controllers.NewErrorHandler(r.runtimeController.RunSSEHandler),
+			// SSE handler should not use NewErrorHandler as it writes its own headers
+			HandlerFunc: func(rw http.ResponseWriter, req *http.Request) {
+				_ = r.runtimeController.RunSSEHandler(rw, req)
+			},
 		},
 	}
 }

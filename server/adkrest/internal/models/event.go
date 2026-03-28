@@ -41,6 +41,7 @@ type Event struct {
 	Partial            bool                                        `json:"partial,omitempty"`
 	LongRunningToolIDs []string                                    `json:"longRunningToolIds,omitempty"`
 	Content            *genai.Content                              `json:"content"`
+	ThinkingContent    string                                      `json:"thinkingContent,omitempty"`
 	GroundingMetadata  *genai.GroundingMetadata                    `json:"groundingMetadata"`
 	UsageMetadata      *genai.GenerateContentResponseUsageMetadata `json:"usageMetadata"`
 	TurnComplete       bool                                        `json:"turnComplete,omitempty"`
@@ -95,6 +96,7 @@ func FromSessionEvent(event session.Event) Event {
 		LongRunningToolIDs: event.LongRunningToolIDs,
 		AvgLogprobs:        event.LLMResponse.AvgLogprobs,
 		Content:            event.LLMResponse.Content,
+		ThinkingContent:    event.LLMResponse.ThinkingContent,
 		GroundingMetadata:  event.LLMResponse.GroundingMetadata,
 		UsageMetadata:      event.LLMResponse.UsageMetadata,
 		TurnComplete:       event.LLMResponse.TurnComplete,

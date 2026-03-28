@@ -44,6 +44,11 @@ func NewErrorHandler(fn errorHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := fn(w, r)
 		if err != nil {
+			// Check if headers were already written (for SSE streaming)
+			if len(w.Header().Get("Content-Type")) > 0 {
+				// Headers already sent, can't write HTTP error for streaming
+				return
+			}
 			if statusErr, ok := err.(statusError); ok {
 				http.Error(w, statusErr.Error(), statusErr.Status())
 			} else {
